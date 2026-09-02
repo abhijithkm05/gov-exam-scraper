@@ -70,21 +70,27 @@ class ExamRecord(BaseModel):
     last_date: Optional[date] = None
     eligibility: Optional[str] = Field(default=None, max_length=500)
     apply_link: Optional[str] = None
+    pdf_link: Optional[str] = Field(default=None, description="Direct URL to official notification PDF")
     status: ExamStatus = ExamStatus.OPEN
     source_url: Optional[str] = None
     content_hash: str = Field(default="", description="Deterministic SHA-256 fingerprint")
 
     def model_post_init(self, __context: object) -> None:
         if not self.content_hash:
-            normalized_components = [
-                self.exam_name.strip().lower(),
-                self.sector.value,
-                self.last_date.isoformat() if self.last_date else "no_date",
-                str(self.apply_link or "").strip().lower(),
-                self.status.value,
-            ]
-            raw_string = "|".join(normalized_components)
-            self.content_hash = hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
+            self.recalculate_hash()
+
+    def recalculate_hash(self) -> str:
+        """Generates or updates the SHA-256 fingerprint from validated fields."""
+        normalized_components = [
+            self.exam_name.strip().lower(),
+            self.sector.value,
+            self.last_date.isoformat() if self.last_date else "no_date",
+            str(self.apply_link or "").strip().lower(),
+            str(self.pdf_link or "").strip().lower(),
+            self.status.value,
+        ]
+        self.content_hash = hashlib.sha256("|".join(normalized_components).encode("utf-8")).hexdigest()
+        return self.content_hash
 
     @field_validator("last_date", mode="before")
     @classmethod
@@ -110,7 +116,6 @@ class ScraperSource(BaseModel):
 
 
 class SecretString(str):
-    """String wrapper ensuring compatibility whether treated as str or SecretStr."""
     def get_secret_value(self) -> str:
         return str(self)
 

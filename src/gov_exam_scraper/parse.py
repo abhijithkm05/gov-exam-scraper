@@ -1,118 +1,89 @@
-﻿"""Groq structured extraction engine with fallback JSON parsing."""
+﻿"""Groq Cloud structured JSON parsing engine for recruitment notifications."""
 
 import json
-import re
-from groq import BadRequestError, Groq, RateLimitError
-from pydantic import ValidationError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+import logging
+import time
+from typing import Optional
+from groq import Groq
 
-from gov_exam_scraper.exceptions import (
-    ConfigurationError,
-    GroqRateLimitError,
-    LLMResponseValidationError,
-)
+from gov_exam_scraper.exceptions import ParseError
 from gov_exam_scraper.models import ExamRecord, ExtractionBatch, ScraperSettings, Sector
 
-SYSTEM_PROMPT = """You are a backend JSON extraction service for Indian government recruitment notifications.
-You must output ONLY valid JSON with the exact structure below. Do not include markdown code fences or explanatory text.
+logger = logging.getLogger("gov_exam_scraper")
 
-{"exams": [{"exam_name": "Official Title", "sector": "STATE_PSC", "last_date": "YYYY-MM-DD", "eligibility": "Brief qualifications", "apply_link": "https://...", "status": "OPEN"}]}
+EXTRACTION_SYSTEM_PROMPT = """You are an expert government recruitment analyst.
+Analyze the provided government portal text and extract any CURRENT active job/exam notifications.
 
-Allowed sector values: UPSC, SSC, STATE_PSC, BANKING, RAILWAY, DEFENCE, POLICE, TEACHING, PSU, ENGINEERING, OTHER.
-Allowed status values: OPEN, CLOSED, UPCOMING, UNKNOWN.
-If no exams are found, return: {"exams": []}"""
+Output a valid JSON object matching this schema:
+{
+  "exams": [
+    {
+      "exam_name": "Full official title of the vacancy or exam",
+      "sector": "UPSC, SSC, STATE_PSC, BANKING, RAILWAY, DEFENCE, POLICE, TEACHING, PSU, ENGINEERING, or OTHER",
+      "last_date": "YYYY-MM-DD or null",
+      "eligibility": "Brief qualifications or null",
+      "apply_link": "Direct URL or null",
+      "pdf_link": "Direct .pdf link or null",
+      "status": "OPEN, CLOSED, or UPCOMING"
+    }
+  ]
+}
 
-
-def extract_json_payload(raw_text: str) -> str:
-    """Extracts the outermost JSON object substring from raw model output."""
-    cleaned = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    elif cleaned.startswith("```"):
-        cleaned = cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    cleaned = cleaned.strip()
-
-    match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
-    return match.group(1).strip() if match else cleaned
+CRITICAL RULES:
+1. If NO current recruitment notifications are found, you MUST return: {"exams": []}
+2. Extract direct links to official notification PDFs into "pdf_link".
+3. Return ONLY the JSON object. Do not include markdown codeblocks or conversational text.
+"""
 
 
 class GroqParser:
-    """Extracts structured ExamRecord models using Groq Cloud API."""
+    """Parses raw cleaned text into validated ExamRecord instances using Groq inference."""
 
-    def __init__(self, settings: ScraperSettings | None = None) -> None:
+    def __init__(self, settings: Optional[ScraperSettings] = None) -> None:
         self.settings = settings or ScraperSettings()
         api_key = self.settings.groq_api_key.get_secret_value()
         if not api_key:
-            raise ConfigurationError("GROQ_API_KEY environment variable is required.")
+            raise ParseError("GROQ_API_KEY is missing. Check your .env file.")
         self.client = Groq(api_key=api_key)
 
-    def parse_exams(
-        self,
-        cleaned_text: str,
-        source_url: str,
-        sector_hint: Sector = Sector.OTHER,
-    ) -> list[ExamRecord]:
-        """Extracts structured exam records from page text."""
-        if not cleaned_text or len(cleaned_text.strip()) < 30:
+    def parse_exams(self, cleaned_text: str, source_url: str = "", sector_hint: Sector = Sector.OTHER) -> list[ExamRecord]:
+        """Extracts structured ExamRecord objects with rate-limit retries."""
+        if not cleaned_text.strip() or len(cleaned_text.strip()) < 30:
             return []
 
-        content_sample = cleaned_text[:7000]
+        user_content = f"Source Portal URL: {source_url}\nSector Hint: {sector_hint.value}\n\nPAGE CONTENT:\n{cleaned_text}"
 
-        user_prompt = (
-            f"Portal URL: {source_url}\n"
-            f"Sector Hint: {sector_hint.value}\n\n"
-            f"Page Content:\n{content_sample}\n\n"
-            f"Extract all recruitment notifications in JSON format."
-        )
-
-        @retry(
-            reraise=True,
-            stop=stop_after_attempt(self.settings.max_retries),
-            wait=wait_exponential(multiplier=1, min=2, max=8),
-            retry=retry_if_exception_type(RateLimitError),
-        )
-        def _call_groq() -> str:
-            # 1. Primary extraction with json_object enforcement
+        max_retries = 3
+        for attempt in range(max_retries):
             try:
                 response = self.client.chat.completions.create(
                     model=self.settings.groq_model,
                     messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
+                        {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_content},
                     ],
                     response_format={"type": "json_object"},
                     temperature=0.1,
-                    max_tokens=4096,
                 )
-                return response.choices[0].message.content or '{"exams": []}'
-            except BadRequestError as e:
-                # 2. Resilient fallback if json_validate_failed is triggered
-                if "json_validate_failed" in str(e):
-                    fallback_response = self.client.chat.completions.create(
-                        model=self.settings.groq_model,
-                        messages=[
-                            {"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        temperature=0.1,
-                        max_tokens=4096,
-                    )
-                    return fallback_response.choices[0].message.content or '{"exams": []}'
-                raise
-            except RateLimitError as e:
-                raise GroqRateLimitError(str(e)) from e
+                raw_content = response.choices[0].message.content or '{"exams": []}'
+                data = json.loads(raw_content)
 
-        raw_output = _call_groq()
-        json_str = extract_json_payload(raw_output)
-
-        try:
-            payload = json.loads(json_str)
-            batch = ExtractionBatch.model_validate(payload)
-            for exam in batch.exams:
-                if not exam.source_url:
+                batch = ExtractionBatch.model_validate(data)
+                for exam in batch.exams:
                     exam.source_url = source_url
-            return batch.exams
-        except (json.JSONDecodeError, ValidationError) as e:
-            raise LLMResponseValidationError(f"Invalid JSON from Groq: {e}\nRaw: {raw_output[:250]}") from e
+                    if exam.sector == Sector.OTHER and sector_hint != Sector.OTHER:
+                        exam.sector = sector_hint
+                return batch.exams
+
+            except Exception as exc:
+                err_msg = str(exc)
+                if "429" in err_msg or "rate_limit" in err_msg.lower():
+                    wait_time = (attempt + 1) * 3
+                    logger.info(f"Groq TPM pacing: waiting {wait_time}s before retrying {source_url}...")
+                    time.sleep(wait_time)
+                    continue
+                
+                logger.warning(f"Groq parsing failed for {source_url}: {exc}")
+                return []
+
+        return []
