@@ -2,6 +2,7 @@
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
+import logging
 import requests
 
 from gov_exam_scraper.exceptions import ConfigurationError, NotionSyncError
@@ -9,13 +10,10 @@ from gov_exam_scraper.fetch import ContentFetcher
 from gov_exam_scraper.models import ExamRecord, ScraperSettings, ScraperSource, Sector
 from gov_exam_scraper.parse import GroqParser
 
+logger = logging.getLogger("gov_exam_scraper")
+
 DEFAULT_SOURCES = [
-    ScraperSource(
-        name="KPSC Karnataka Recruitment",
-        url="https://kpsc.kar.nic.in/",
-        sector_hint=Sector.STATE_PSC,
-        use_playwright=False,
-    ),
+    # --- Karnataka State Portals ---
     ScraperSource(
         name="KEA Karnataka Portal",
         url="https://cetonline.karnataka.gov.in/kea/",
@@ -23,11 +21,87 @@ DEFAULT_SOURCES = [
         use_playwright=False,
     ),
     ScraperSource(
-        name="Karnataka FreeJobAlert",
-        url="https://www.freejobalert.com/karnataka-government-jobs/",
+        name="KPSC Karnataka Recruitment",
+        url="https://kpsc.kar.nic.in/",
         sector_hint=Sector.STATE_PSC,
         use_playwright=False,
     ),
+    ScraperSource(
+        name="Karnataka State Police (KSP)",
+        url="https://ksp-recruitment.in/",
+        sector_hint=Sector.POLICE,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="Karnataka Forest Department (KFD)",
+        url="https://aranya.gov.in/",
+        sector_hint=Sector.STATE_PSC,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="Karnataka High Court Judiciary",
+        url="https://karnatakajudiciary.kar.nic.in/recruitment.php",
+        sector_hint=Sector.OTHER,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="Karnataka Power Corporation (KPTCL)",
+        url="https://kptcl.karnataka.gov.in/",
+        sector_hint=Sector.ENGINEERING,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="Bangalore Metro Rail (BMRCL)",
+        url="https://english.bmrc.co.in/Career",
+        sector_hint=Sector.PSU,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="Karnataka School Education (DSEL)",
+        url="https://schooleducation.karnataka.gov.in/",
+        sector_hint=Sector.TEACHING,
+        use_playwright=False,
+    ),
+
+    # --- Banking, Insurance & Regulatory ---
+    ScraperSource(
+        name="IBPS Banking Exams",
+        url="https://www.ibps.in/",
+        sector_hint=Sector.BANKING,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="State Bank of India (SBI Careers)",
+        url="https://sbi.co.in/web/careers/current-openings",
+        sector_hint=Sector.BANKING,
+        use_playwright=True,
+    ),
+    ScraperSource(
+        name="Reserve Bank of India (RBI)",
+        url="https://opportunities.rbi.org.in/scripts/vacancies.aspx",
+        sector_hint=Sector.BANKING,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="NABARD Recruitment",
+        url="https://www.nabard.org/careers-notices.aspx",
+        sector_hint=Sector.BANKING,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="National Insurance Company (NICL)",
+        url="https://nationalinsurance.nic.co.in/en/recruitment",
+        sector_hint=Sector.OTHER,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="Life Insurance Corporation (LIC)",
+        url="https://licindia.in/careers",
+        sector_hint=Sector.OTHER,
+        use_playwright=False,
+    ),
+
+    # --- Central Commissions & Railways ---
     ScraperSource(
         name="UPSC Active Examinations",
         url="https://upsc.gov.in/examinations/active-examinations",
@@ -35,10 +109,68 @@ DEFAULT_SOURCES = [
         use_playwright=False,
     ),
     ScraperSource(
-        name="SSC Latest Notices",
+        name="SSC Notices",
         url="https://ssc.gov.in/",
         sector_hint=Sector.SSC,
         use_playwright=True,
+    ),
+    ScraperSource(
+        name="RRB Bangalore",
+        url="https://www.rrbbnc.gov.in/",
+        sector_hint=Sector.RAILWAY,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="National Testing Agency (NTA)",
+        url="https://nta.ac.in/",
+        sector_hint=Sector.OTHER,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="EPFO Recruitment",
+        url="https://www.epfindia.gov.in/site_en/Miscellaneous_Recruitment.php",
+        sector_hint=Sector.OTHER,
+        use_playwright=False,
+    ),
+
+    # --- Engineering, Defence & Central PSUs ---
+    ScraperSource(
+        name="ISRO Careers",
+        url="https://www.isro.gov.in/Careers.html",
+        sector_hint=Sector.ENGINEERING,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="HAL Careers",
+        url="https://hal-india.co.in/Career_Listing.aspx",
+        sector_hint=Sector.PSU,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="BEL Bangalore",
+        url="https://bel-india.in/careers/",
+        sector_hint=Sector.PSU,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="DRDO RAC",
+        url="https://rac.gov.in/",
+        sector_hint=Sector.DEFENCE,
+        use_playwright=False,
+    ),
+    ScraperSource(
+        name="Airports Authority of India (AAI)",
+        url="https://www.aai.aero/en/careers/recruitment",
+        sector_hint=Sector.PSU,
+        use_playwright=True,
+    ),
+
+    # --- Real-Time State Aggregator Feed ---
+    ScraperSource(
+        name="Karnataka FreeJobAlert Feed",
+        url="https://www.freejobalert.com/karnataka-government-jobs/",
+        sector_hint=Sector.STATE_PSC,
+        use_playwright=False,
     ),
 ]
 
@@ -62,11 +194,15 @@ class GovExamScraper:
         return self.parser
 
     def scrape_source(self, source: ScraperSource) -> list[ExamRecord]:
-        """Fetches and parses a single government exam source."""
-        raw_html = self.fetcher.fetch(url=source.url, force_browser=source.use_playwright)
-        cleaned_text = self.fetcher.clean_html(raw_html, base_url=source.url, target_selector=source.css_selector)
-        parser = self._get_parser()
-        return parser.parse_exams(cleaned_text, source_url=source.url, sector_hint=source.sector_hint)
+        """Fetches and parses a single government exam source safely."""
+        try:
+            raw_html = self.fetcher.fetch(url=source.url, force_browser=source.use_playwright)
+            cleaned_text = self.fetcher.clean_html(raw_html, base_url=source.url, target_selector=source.css_selector)
+            parser = self._get_parser()
+            return parser.parse_exams(cleaned_text, source_url=source.url, sector_hint=source.sector_hint)
+        except Exception as exc:
+            logger.warning(f"Could not scrape {source.name} ({source.url}): {exc}")
+            return []
 
     def scrape_all(self, max_workers: int | None = None) -> list[ExamRecord]:
         """Scrapes all active sources concurrently with cross-source deduplication."""
@@ -105,7 +241,6 @@ class GovExamScraper:
             "Content-Type": "application/json",
         }
 
-        # 1. Fetch existing page hashes
         query_url = f"https://api.notion.com/v1/databases/{db_id}/query"
         resp = requests.post(query_url, headers=headers, json={"page_size": 100}, timeout=30)
         if resp.status_code != 200:
@@ -121,7 +256,6 @@ class GovExamScraper:
         created_records: list[ExamRecord] = []
         skipped_count = 0
 
-        # 2. Ingest new records
         for rec in records:
             if rec.content_hash in existing_pages:
                 skipped_count += 1
@@ -144,7 +278,7 @@ class GovExamScraper:
             if c_resp.status_code == 200:
                 created_records.append(rec)
             else:
-                raise NotionSyncError(f"Failed to create page: {c_resp.text}")
+                logger.warning(f"Failed to create page for {rec.exam_name}: {c_resp.text}")
 
         stats = {"created": len(created_records), "updated": 0, "skipped": skipped_count}
         return stats, created_records
