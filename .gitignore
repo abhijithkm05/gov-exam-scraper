@@ -16,3 +16,5 @@ dist/
 exams.json
 .cache/
 .pytest_cache/
+
+gov-exam-scraper/
