@@ -11,6 +11,7 @@ import typer
 
 from gov_exam_scraper.fetch import ContentFetcher
 from gov_exam_scraper.models import ExamRecord, ScraperSettings, Sector
+from gov_exam_scraper.notify import dispatch_alerts
 from gov_exam_scraper.parse import GroqParser
 from gov_exam_scraper.scraper import DEFAULT_SOURCES, GovExamScraper
 
@@ -44,6 +45,8 @@ def render_table(records: list[ExamRecord], title: str = "Government Exam Notifi
 @app.command()
 def scrape(
     sync_notion: bool = typer.Option(False, "--sync-notion", "-s", help="Sync extracted exams to Notion database"),
+    archive_expired: bool = typer.Option(True, "--archive-expired/--no-archive-expired", help="Auto-close past exams in Notion"),
+    notify: bool = typer.Option(True, "--notify/--no-notify", help="Send Discord/Telegram alerts for new exams"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Export to JSON or CSV file"),
     workers: int = typer.Option(5, "--workers", "-w", help="Number of concurrent scraper threads"),
 ) -> None:
@@ -73,16 +76,30 @@ def scrape(
 
     if sync_notion:
         console.print("[bold yellow]Syncing records to Notion...[/bold yellow]")
-        stats = scraper.sync_to_notion(records)
+        stats, created_records = scraper.sync_to_notion(records)
+
+        archived_count = 0
+        if archive_expired:
+            console.print("[bold yellow]Checking for expired exams in Notion...[/bold yellow]")
+            archived_count = scraper.archive_expired_exams()
+
         console.print(
             Panel.fit(
                 f"[bold green]Sync Complete![/bold green]\n"
                 f"• Created: [green]{stats['created']}[/green]\n"
                 f"• Updated: [yellow]{stats['updated']}[/yellow]\n"
-                f"• Skipped: [dim]{stats['skipped']}[/dim]",
+                f"• Skipped: [dim]{stats['skipped']}[/dim]\n"
+                f"• Archived Expired: [red]{archived_count}[/red]",
                 title="Notion Sync Results",
             )
         )
+
+        if notify and created_records:
+            console.print("[bold cyan]Dispatching alerts...[/bold cyan]")
+            alerts = dispatch_alerts(created_records, archived_count=archived_count)
+            for channel, ok in alerts.items():
+                status = "[green]Delivered[/green]" if ok else "[red]Failed[/red]"
+                console.print(f"• {channel.capitalize()}: {status}")
 
 
 @app.command()

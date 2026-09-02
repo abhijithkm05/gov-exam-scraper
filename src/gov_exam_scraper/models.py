@@ -153,12 +153,17 @@ class ScraperSettings(BaseSettings):
     )
 
     groq_api_key: SecretStr = Field(default=SecretStr(""), alias="GROQ_API_KEY")
-    groq_model: str = Field(default="llama-3.1-8b-instant", alias="GROQ_MODEL")
+    groq_model: str = Field(default="qwen/qwen3.6-27b", alias="GROQ_MODEL")
     notion_api_key: SecretStr = Field(default=SecretStr(""), alias="NOTION_API_KEY")
     notion_database_id: str = Field(default="", alias="NOTION_DATABASE_ID")
 
+    # Mobile Alerts (Discord / Telegram)
+    discord_webhook_url: SecretStr = Field(default=SecretStr(""), alias="DISCORD_WEBHOOK_URL")
+    telegram_bot_token: SecretStr = Field(default=SecretStr(""), alias="TELEGRAM_BOT_TOKEN")
+    telegram_chat_id: str = Field(default="", alias="TELEGRAM_CHAT_ID")
+
     cache_ttl_seconds: int = Field(default=3600, alias="CACHE_TTL_SECONDS")
     max_workers: int = Field(default=5, alias="MAX_WORKERS")
-    request_timeout_seconds: int = Field(default=30, alias="REQUEST_TIMEOUT_SECONDS")
-    playwright_timeout_seconds: int = Field(default=45, alias="PLAYWRIGHT_TIMEOUT_SECONDS")
+    request_timeout_seconds: int = Field(default=60, alias="REQUEST_TIMEOUT_SECONDS")
+    playwright_timeout_seconds: int = Field(default=60, alias="PLAYWRIGHT_TIMEOUT_SECONDS")
     max_retries: int = Field(default=3, alias="MAX_RETRIES")

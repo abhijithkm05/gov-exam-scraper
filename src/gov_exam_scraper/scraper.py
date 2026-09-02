@@ -1,6 +1,7 @@
 ﻿"""Main orchestrator and multi-portal scraping engine with Notion synchronization."""
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date
 import requests
 
 from gov_exam_scraper.exceptions import ConfigurationError, NotionSyncError
@@ -79,7 +80,6 @@ class GovExamScraper:
             future_to_source = {executor.submit(self.scrape_source, src): src for src in active_sources}
 
             for future in as_completed(future_to_source):
-                src = future_to_source[future]
                 try:
                     records = future.result()
                     for rec in records:
@@ -91,7 +91,7 @@ class GovExamScraper:
 
         return all_records
 
-    def sync_to_notion(self, records: list[ExamRecord]) -> dict[str, int]:
+    def sync_to_notion(self, records: list[ExamRecord]) -> tuple[dict[str, int], list[ExamRecord]]:
         """Syncs exam records with a Notion database using SHA-256 change detection."""
         api_key = self.settings.notion_api_key.get_secret_value()
         db_id = self.settings.notion_database_id
@@ -118,11 +118,10 @@ class GovExamScraper:
             if hash_props:
                 existing_pages[hash_props[0]["text"]["content"]] = page_id
 
-        created_count = 0
-        updated_count = 0
+        created_records: list[ExamRecord] = []
         skipped_count = 0
 
-        # 2. Process records
+        # 2. Ingest new records
         for rec in records:
             if rec.content_hash in existing_pages:
                 skipped_count += 1
@@ -143,8 +142,61 @@ class GovExamScraper:
             create_payload = {"parent": {"database_id": db_id}, "properties": properties}
             c_resp = requests.post(create_url, headers=headers, json=create_payload, timeout=30)
             if c_resp.status_code == 200:
-                created_count += 1
+                created_records.append(rec)
             else:
                 raise NotionSyncError(f"Failed to create page: {c_resp.text}")
 
-        return {"created": created_count, "updated": updated_count, "skipped": skipped_count}
+        stats = {"created": len(created_records), "updated": 0, "skipped": skipped_count}
+        return stats, created_records
+
+    def archive_expired_exams(self) -> int:
+        """Queries Notion for exams where Last Date < today and marks their Status as CLOSED."""
+        api_key = self.settings.notion_api_key.get_secret_value()
+        db_id = self.settings.notion_database_id
+
+        if not api_key or not db_id:
+            return 0
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+        }
+
+        today_iso = date.today().isoformat()
+        query_url = f"https://api.notion.com/v1/databases/{db_id}/query"
+        filter_payload = {
+            "filter": {
+                "and": [
+                    {
+                        "property": "Last Date",
+                        "date": {"before": today_iso},
+                    },
+                    {
+                        "property": "Status",
+                        "select": {"does_not_equal": "CLOSED"},
+                    },
+                ]
+            }
+        }
+
+        resp = requests.post(query_url, headers=headers, json=filter_payload, timeout=30)
+        if resp.status_code != 200:
+            return 0
+
+        expired_pages = resp.json().get("results", [])
+        closed_count = 0
+
+        for page in expired_pages:
+            page_id = page["id"]
+            patch_url = f"https://api.notion.com/v1/pages/{page_id}"
+            patch_payload = {
+                "properties": {
+                    "Status": {"select": {"name": "CLOSED"}}
+                }
+            }
+            p_resp = requests.patch(patch_url, headers=headers, json=patch_payload, timeout=30)
+            if p_resp.status_code == 200:
+                closed_count += 1
+
+        return closed_count
