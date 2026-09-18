@@ -49,7 +49,7 @@ DEFAULT_SOURCES = [
     ScraperSource(name="Airports Authority of India (AAI)", url="https://www.aai.aero/en/careers/recruitment", sector_hint=Sector.PSU, use_playwright=True),
 
     # Real-Time Consolidated State Feed
-    ScraperSource(name="Karnataka FreeJobAlert Feed", url="https://www.freejobalert.com/karnataka-government-jobs/", sector_hint=Sector.STATE_PSC),,
+    ScraperSource(name="Karnataka FreeJobAlert Feed", url="https://www.freejobalert.com/karnataka-government-jobs/", sector_hint=Sector.STATE_PSC),
     {
         "name": "India Post - GDS Portal",
         "url": "https://indiapostgdsonline.gov.in",
