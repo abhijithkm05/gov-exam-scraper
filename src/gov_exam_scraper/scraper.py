@@ -50,18 +50,16 @@ DEFAULT_SOURCES = [
 
     # Real-Time Consolidated State Feed
     ScraperSource(name="Karnataka FreeJobAlert Feed", url="https://www.freejobalert.com/karnataka-government-jobs/", sector_hint=Sector.STATE_PSC),
-    {
-        "name": "India Post - GDS Portal",
-        "url": "https://indiapostgdsonline.gov.in",
-        "category": "CENTRAL",
-        "render_js": False,
-    },
-    {
-        "name": "India Post - General Recruitment",
-        "url": "https://www.indiapost.gov.in/VAS/Pages/Recruitment.aspx",
-        "category": "CENTRAL",
-        "render_js": False,
-    },
+    ScraperSource(
+        name="India Post - GDS Portal",
+        url="https://indiapostgdsonline.gov.in",
+        sector_hint=Sector.CENTRAL,
+    ),
+    ScraperSource(
+        name="India Post - General Recruitment",
+        url="https://www.indiapost.gov.in/VAS/Pages/Recruitment.aspx",
+        sector_hint=Sector.CENTRAL,
+    ),,
 
 ]
 
