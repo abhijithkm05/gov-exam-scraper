@@ -1,27 +1,3 @@
-﻿import os
-import re
-import json
-import time
-import requests
-from bs4 import BeautifulSoup
-from pathlib import Path
-from dotenv import load_dotenv
-
-load_dotenv()
-
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-
-CACHE_FILE = Path("data/sent_alerts.json")
-CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-}
-
-# Strict match rules: ONLY your 11 applied exams
 APPLIED_EXAM_PATTERNS = {
     "RRB Section Controller (CEN 03/2026)": [
         r"\bsection\s*controller\b",
@@ -72,6 +48,12 @@ APPLIED_EXAM_PATTERNS = {
     ],
     "NICL 500 Assistants": [
         r"\bnicl\b.*\b(?:assistant|mains)\b",
+    ],
+    "IBPS RRB Office Assistant (CRP RRBs XV)": [
+        r"\bibps\s*rrb\b.*\b(?:clerk|office\s*assistant)\b",
+        r"\brrb\s*office\s*assistant\b",
+        r"\bcrp\s*rrbs?\s*(?:xv|15)\b",
+        r"\bibps\s*rrb\s*clerk\b",
     ],
 }
 
