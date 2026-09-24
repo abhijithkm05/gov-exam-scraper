@@ -1,71 +1,47 @@
-APPLIED_EXAM_PATTERNS = {
-    "RRB Section Controller (CEN 03/2026)": [
-        r"\bsection\s*controller\b",
-        r"\bcen\s*03/2026\b",
-        r"\brrb\b.*\bsection\s*controller\b",
-    ],
-    "RRB Junior Engineer (CEN 04/2026)": [
-        r"\brrb\s*je\b",
-        r"\brrb\s*junior\s*engineer\b",
-        r"\bcen\s*04/2026\b",
-    ],
-    "HAL Design / Management Trainee": [
-        r"\bhal\s*(?:design|management)?\s*trainee\b",
-        r"\bhindustan\s*aeronautics\b.*\btrainee\b",
-    ],
-    "UPSC EPFO - APFC": [
-        r"\bepfo\s*apfc\b",
-        r"\bapfc\b",
-        r"\bassistant\s*provident\s*fund\s*commissioner\b",
-        r"\bepfo\b.*\b52/2026\b",
-    ],
-    "India Post GDS": [
-        r"\bgramin\s*dak\s*sevak\b",
-        r"\bgds\b.*\b(?:schedule\s*ii|merit\s*list|result|cutoff|2026)\b",
-        r"\bindia\s*post\s*gds\b",
-    ],
-    "KPSC Gazetted Probationers": [
-        r"\bkpsc\b.*\b(?:gazetted|probationer|kas)\b",
-        r"\bgazetted\s*probationers?\b",
-    ],
-    "KEA VAO & Land Surveyor": [
-        r"\bkea\b.*\b(?:vao|village\s*administrative|land\s*surveyor)\b",
-        r"\bvillage\s*administrative\s*officer\b",
-    ],
-    "KFD Forest Watcher": [
-        r"\bkfd\b.*\bforest\s*watcher\b",
-        r"\bkarnataka\s*forest\b.*\bwatcher\b",
-    ],
-    "SBI Junior Associates": [
-        r"\bsbi\s*clerk\b",
-        r"\bsbi\s*ja\b",
-        r"\bsbi\s*junior\s*associate\b",
-    ],
-    "IBPS Customer Service Associates (Clerk)": [
-        r"\bibps\s*clerk\b",
-        r"\bibps\s*csa\b",
-        r"\bcustomer\s*service\s*associate\b",
-    ],
-    "NICL 500 Assistants": [
-        r"\bnicl\b.*\b(?:assistant|mains)\b",
-    ],
-    "IBPS RRB Office Assistant (CRP RRBs XV)": [
-        r"\bibps\s*rrb\b.*\b(?:clerk|office\s*assistant)\b",
-        r"\brrb\s*office\s*assistant\b",
-        r"\bcrp\s*rrbs?\s*(?:xv|15)\b",
-        r"\bibps\s*rrb\s*clerk\b",
-    ],
+﻿import os
+import re
+import json
+import requests
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
+NOTION_API_KEY = os.getenv("NOTION_API_KEY")
+NOTION_APPLIED_DB_ID = os.getenv("NOTION_APPLIED_DB_ID", "535459a2751646f4906c7c5e03f337ef")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+
+CACHE_FILE = Path("data/sent_alerts.json")
+CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 }
 
-# Captures everything relevant: dates, syllabus, notes, papers, patterns, cutoffs, results
-TOPIC_PATTERN = re.compile(
-    r"(date|exam\s*date|admit\s*card|hall\s*ticket|schedule|cbt|syllabus|notes|"
-    r"pattern|exam\s*pattern|previous\s*year|paper|study\s*material|cut\s*off|cutoff|"
-    r"result|merit\s*list|shortlist|analysis|preparation|strategy|answer\s*key|city\s*intimation)",
+SEARCH_TARGETS = [
+    {"name": "SBI Junior Associates", "query": "SBI Clerk OR SBI Junior Associate (admit card OR exam date)"},
+    {"name": "RRB Section Controller (CEN 03/2026)", "query": "RRB Section Controller CEN 03/2026 (admit card OR exam date)"},
+    {"name": "RRB Junior Engineer (CEN 04/2026)", "query": "RRB JE CEN 04/2026 (admit card OR exam date)"},
+    {"name": "IBPS RRB XV - Office Assistant", "query": "IBPS RRB Clerk OR Office Assistant (admit card OR exam date)"},
+    {"name": "IBPS Customer Service Associates", "query": "IBPS Clerk OR CSA (admit card OR exam date)"},
+    {"name": "UPSC EPFO - APFC", "query": "EPFO APFC exam date OR admit card"},
+    {"name": "India Post GDS", "query": "India Post GDS merit list OR result"},
+    {"name": "HAL Design / Management Trainee", "query": "HAL trainee exam date OR admit card"},
+    {"name": "KPSC Gazetted Probationers", "query": "KPSC Gazetted Probationers exam date OR admit card"},
+    {"name": "KEA VAO & Land Surveyor", "query": "KEA VAO exam date OR admit card"},
+    {"name": "KFD Forest Watcher", "query": "Karnataka Forest Watcher exam date"},
+    {"name": "NICL 500 Assistants", "query": "NICL Assistant exam date OR admit card"},
+]
+
+CRITICAL_KEYWORDS = re.compile(
+    r"(admit\s*card|hall\s*ticket|exam\s*date|schedule|call\s*letter|city\s*intimation|merit\s*list|result\s*out)",
     re.IGNORECASE
 )
 
-def load_sent_cache() -> set:
+def load_cache() -> set:
     if CACHE_FILE.exists():
         try:
             return set(json.loads(CACHE_FILE.read_text(encoding="utf-8")))
@@ -73,14 +49,13 @@ def load_sent_cache() -> set:
             return set()
     return set()
 
-def save_sent_cache(sent_urls: set):
-    CACHE_FILE.write_text(json.dumps(list(sent_urls), indent=2), encoding="utf-8")
+def save_cache(cache: set):
+    CACHE_FILE.write_text(json.dumps(list(cache), indent=2), encoding="utf-8")
 
-def send_alert(title: str, link: str, source: str, matched_exam: str):
+def send_alert(title: str, link: str, exam_name: str, source: str = "Live Feed"):
     msg = (
-        f"🎯 *UPDATE FOR YOUR EXAM*\n"
-        f"📌 *Exam:* {matched_exam}\n"
-        f"📢 *Headline:* {title}\n"
+        f"🚨 *CRITICAL EXAM ALERT: {exam_name}*\n\n"
+        f"📌 *Notice:* {title}\n"
         f"🌐 *Source:* {source}\n"
         f"🔗 *Link:* {link}"
     )
@@ -99,102 +74,100 @@ def send_alert(title: str, link: str, source: str, matched_exam: str):
         try:
             requests.post(
                 DISCORD_WEBHOOK_URL,
-                json={"content": f"🎯 **UPDATE FOR YOUR EXAM: {matched_exam}**\n**Headline:** {title}\n**Source:** {source}\n**Link:** {link}"},
+                json={"content": f"🚨 **CRITICAL EXAM ALERT: {exam_name}**\n**Notice:** {title}\n**Link:** {link}"},
                 timeout=10,
             )
         except Exception as e:
             print(f"  ⚠️ Discord alert error: {e}")
 
-def scrape_articles():
-    articles = []
-    
-    # 1. Testbook
-    for p in range(1, 3):
-        url = "https://testbook.com/news/" if p == 1 else f"https://testbook.com/news/page/{p}/"
-        try:
-            r = requests.get(url, headers=HEADERS, timeout=12)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, "html.parser")
-                for a in soup.find_all("a", href=True):
-                    text = a.get_text(strip=True)
-                    href = a["href"]
-                    if len(text) > 15 and "/news/" in href:
-                        full_link = href if href.startswith("http") else f"https://testbook.com{href}"
-                        articles.append({"title": text, "link": full_link, "source": "Testbook"})
-        except Exception:
-            pass
-
-    # 2. Adda247
-    for p in range(1, 3):
-        url = "https://www.adda247.com/exams/" if p == 1 else f"https://www.adda247.com/exams/page/{p}/"
-        try:
-            r = requests.get(url, headers=HEADERS, timeout=12)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, "html.parser")
-                for a in soup.find_all("a", href=True):
-                    text = a.get_text(strip=True)
-                    href = a["href"]
-                    if len(text) > 20 and "/exams/" in href:
-                        full_link = href if href.startswith("http") else f"https://www.adda247.com{href}"
-                        articles.append({"title": text, "link": full_link, "source": "Adda247"})
-        except Exception:
-            pass
-
-    # 3. Oliveboard
+def update_notion_entry(exam_name: str, notice_title: str, link: str):
+    if not NOTION_API_KEY or not NOTION_APPLIED_DB_ID:
+        return
+    headers = {
+        "Authorization": f"Bearer {NOTION_API_KEY}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+    }
     try:
-        r = requests.get("https://www.oliveboard.in/blog/", headers=HEADERS, timeout=12)
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, "html.parser")
-            for a in soup.find_all("a", href=True):
-                text = a.get_text(strip=True)
-                href = a["href"]
-                if len(text) > 20 and "/blog/" in href:
-                    full_link = href if href.startswith("http") else f"https://www.oliveboard.in{href}"
-                    articles.append({"title": text, "link": full_link, "source": "Oliveboard"})
-    except Exception:
-        pass
+        res = requests.post(
+            f"https://api.notion.com/v1/databases/{NOTION_APPLIED_DB_ID}/query",
+            headers=headers,
+            json={},
+            timeout=15,
+        )
+        if res.status_code != 200:
+            return
 
-    return articles
+        for row in res.json().get("results", []):
+            props = row.get("properties", {})
+            title_prop = props.get("Exam Name", {}).get("title", [])
+            row_title = title_prop[0].get("text", {}).get("content", "") if title_prop else ""
+            
+            first_key = exam_name.split()[0].lower()
+            if first_key in row_title.lower():
+                payload = {
+                    "properties": {
+                        "Latest News": {"rich_text": [{"text": {"content": notice_title[:190]}}]},
+                    }
+                }
+                if any(w in notice_title.lower() for w in ["admit card", "hall ticket", "call letter"]):
+                    payload["properties"]["Status"] = {"select": {"name": "Admit Card Out"}}
+                    if link:
+                        payload["properties"]["Admit Card URL"] = {"url": link}
+                elif any(w in notice_title.lower() for w in ["exam date", "schedule"]):
+                    payload["properties"]["Status"] = {"select": {"name": "Exam Scheduled"}}
+
+                patch_res = requests.patch(f"https://api.notion.com/v1/pages/{row['id']}", headers=headers, json=payload, timeout=10)
+                if patch_res.status_code == 200:
+                    print(f"  ✅ Notion successfully updated for {row_title}!")
+                break
+    except Exception as e:
+        print(f"  ⚠️ Notion update error: {e}")
+
+def fetch_rss_feed(query: str):
+    url = f"https://news.google.com/rss/search?q={requests.utils.quote(query)}+when:7d&hl=en-IN&gl=IN&ceid=IN:en"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=12)
+        if r.status_code == 200:
+            root = ET.fromstring(r.content)
+            items = []
+            for item in root.findall(".//item"):
+                title = item.find("title").text if item.find("title") is not None else ""
+                link = item.find("link").text if item.find("link") is not None else ""
+                source = item.find("source").text if item.find("source") is not None else "Google News"
+                if title and link:
+                    items.append({"title": title, "link": link, "source": source})
+            return items
+    except Exception as e:
+        print(f"  ⚠️ RSS fetch error: {e}")
+    return []
 
 def main():
-    print("🔍 Scanning aggregators strictly for your 11 applied exams...")
-    sent_urls = load_sent_cache()
-    articles = scrape_articles()
-    
-    seen_in_batch = set()
-    matches_sent = 0
+    print("🚀 Scanning Feeds across all 12 applied exams...")
+    cache = load_cache()
+    alerts_fired = 0
 
-    for art in articles:
-        link = art["link"]
-        if link in sent_urls or link in seen_in_batch:
-            continue
-        seen_in_batch.add(link)
+    for target in SEARCH_TARGETS:
+        exam_name = target["name"]
+        print(f"🔎 Checking {exam_name}...")
+        articles = fetch_rss_feed(target["query"])
 
-        title = art["title"]
-        title_lower = title.lower()
+        for art in articles:
+            title = art["title"]
+            link = art["link"]
 
-        # Must be about one of your exams
-        matched_exam = None
-        for exam_label, patterns in APPLIED_EXAM_PATTERNS.items():
-            for pat in patterns:
-                if re.search(pat, title_lower):
-                    matched_exam = exam_label
-                    break
-            if matched_exam:
-                break
+            if link in cache:
+                continue
 
-        if not matched_exam:
-            continue
+            if CRITICAL_KEYWORDS.search(title):
+                print(f"  🔥 MATCH DETECTED: [{exam_name}] {title}")
+                send_alert(title, link, exam_name, source=art["source"])
+                update_notion_entry(exam_name, title, link)
+                cache.add(link)
+                alerts_fired += 1
 
-        # Must be relevant (dates, notes, syllabus, cutoff, result, admit card, etc.)
-        if TOPIC_PATTERN.search(title_lower):
-            print(f"  🎯 High-Value Match: [{matched_exam}] {title}")
-            send_alert(title, link, art["source"], matched_exam)
-            sent_urls.add(link)
-            matches_sent += 1
-
-    save_sent_cache(sent_urls)
-    print(f"✨ Scan complete. Dispatched {matches_sent} relevant notifications. Zero spam.")
+    save_cache(cache)
+    print(f"✨ Scan completed. Sent {alerts_fired} critical alerts and synced to Notion.")
 
 if __name__ == "__main__":
     main()
