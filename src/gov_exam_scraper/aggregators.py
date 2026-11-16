@@ -138,6 +138,37 @@ def send_consolidated_alert(exam_name: str, updates: list):
         except Exception as e:
             print(f"  ⚠️ Discord alert error: {e}")
 
+def _find_matching_notion_row(exam_name: str, rows: list[dict]) -> dict | None:
+    target = exam_name.lower()
+    cen_match = re.search(r"\b(\d{2}/20\d{2})\b", target)
+    cen_code = cen_match.group(1) if cen_match else ""
+    stopwords = {"rrb", "ibps", "kea", "kpsc", "upsc", "sbi", "hal", "nicl", "kfd", "cen", "no", "2026", "2027", "the", "and", "for", "of", "in"}
+    tokens = [t for t in re.findall(r"[a-z0-9/]+", target) if t not in stopwords and len(t) >= 3]
+
+    best_row = None
+    best_score = 0
+    for row in rows:
+        props = row.get("properties", {})
+        title_prop = props.get("Exam Name", {}).get("title", [])
+        row_title = title_prop[0].get("text", {}).get("content", "") if title_prop else ""
+        notif_prop = props.get("Notification No", {}).get("rich_text", [])
+        row_notif = notif_prop[0].get("text", {}).get("content", "") if notif_prop else ""
+        haystack = f"{row_title} {row_notif}".lower()
+        if not haystack.strip():
+            continue
+        if cen_code and cen_code in haystack:
+            return row
+        if "under graduate" in target and "under graduate" not in haystack and "undergraduate" not in haystack:
+            continue
+        if "graduate" in target and "under graduate" not in target and ("under graduate" in haystack or "undergraduate" in haystack):
+            continue
+        score = sum(1 for tok in tokens if tok in haystack)
+        if score > best_score:
+            best_score = score
+            best_row = row
+    return best_row if best_score >= 1 else None
+
+
 def update_notion(exam_name: str, updates: list):
     """Updates Notion with the latest milestone and direct verified link."""
     if not NOTION_API_KEY or not NOTION_APPLIED_DB_ID:
@@ -152,14 +183,12 @@ def update_notion(exam_name: str, updates: list):
         if res.status_code != 200:
             return
 
-        for row in res.json().get("results", []):
+        _matched_row = _find_matching_notion_row(exam_name, res.json().get("results", []))
+        for row in ([_matched_row] if _matched_row else []):
             props = row.get("properties", {})
             title_prop = props.get("Exam Name", {}).get("title", [])
             row_title = title_prop[0].get("text", {}).get("content", "") if title_prop else ""
-
-            # Check if row matches the target exam
-            first_key = exam_name.split()[0].lower()
-            if first_key in row_title.lower():
+            if True:
                 latest_up = updates[0]
                 payload = {
                     "properties": {

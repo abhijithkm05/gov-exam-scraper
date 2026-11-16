@@ -1,4 +1,4 @@
-﻿"""Generates the comprehensive 3-part Word documentation for the Gov Exam Tracker."""
+"""Generates the comprehensive 3-part Word documentation for the Gov Exam Tracker."""
 
 import docx
 from docx.shared import Inches, Pt, RGBColor

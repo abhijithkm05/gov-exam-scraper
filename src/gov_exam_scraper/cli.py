@@ -1,4 +1,4 @@
-﻿"""Interactive Command-Line Interface for gov-exam-scraper."""
+"""Interactive Command-Line Interface for gov-exam-scraper."""
 
 import csv
 import json

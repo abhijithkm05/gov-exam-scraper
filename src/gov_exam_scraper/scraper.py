@@ -1,4 +1,4 @@
-﻿"""Main orchestrator and multi-portal scraping engine with Notion synchronization."""
+"""Main orchestrator and multi-portal scraping engine with Notion synchronization."""
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests

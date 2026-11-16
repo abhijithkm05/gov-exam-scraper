@@ -1,4 +1,4 @@
-﻿"""Groq Cloud structured JSON parsing engine for recruitment notifications."""
+"""Groq Cloud structured JSON parsing engine for recruitment notifications."""
 
 import json
 import logging

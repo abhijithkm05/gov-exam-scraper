@@ -1,4 +1,4 @@
-﻿"""Fetch layer supporting HTTP sessions, link verification, and Playwright browser rendering."""
+"""Fetch layer supporting HTTP sessions, link verification, and Playwright browser rendering."""
 
 import logging
 import re

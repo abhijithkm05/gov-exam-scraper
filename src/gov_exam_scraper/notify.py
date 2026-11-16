@@ -1,4 +1,4 @@
-﻿"""Notification dispatchers for Discord Webhooks and Telegram Bot."""
+"""Notification dispatchers for Discord Webhooks and Telegram Bot."""
 
 import logging
 from typing import Optional

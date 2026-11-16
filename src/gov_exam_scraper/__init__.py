@@ -1,4 +1,4 @@
-﻿"""gov-exam-scraper package."""
+"""gov-exam-scraper package."""
 
 from gov_exam_scraper.fetch import ContentFetcher
 from gov_exam_scraper.models import (

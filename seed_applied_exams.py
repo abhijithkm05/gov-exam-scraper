@@ -1,4 +1,4 @@
-﻿"""Seeds applied exams into the dedicated Notion tracker database."""
+"""Seeds applied exams into the dedicated Notion tracker database."""
 
 import requests
 from gov_exam_scraper.models import ScraperSettings

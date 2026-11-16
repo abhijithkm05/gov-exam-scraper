@@ -1,4 +1,4 @@
-﻿"""Domain models, validation schemas, and configuration for gov_exam_scraper."""
+"""Domain models, validation schemas, and configuration for gov_exam_scraper."""
 
 from datetime import date, datetime
 from enum import Enum

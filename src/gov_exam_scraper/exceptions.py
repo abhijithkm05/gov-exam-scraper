@@ -1,4 +1,4 @@
-﻿"""Custom exception hierarchy for gov_exam_scraper."""
+"""Custom exception hierarchy for gov_exam_scraper."""
 
 
 class ScraperError(Exception):
