@@ -1,6 +1,7 @@
 ﻿import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tkinter as tk
@@ -34,6 +35,20 @@ def run_git(*args: str) -> str:
         errors="ignore",
     )
     return res.stdout.strip()
+
+
+def bootstrap_docs_folders() -> None:
+    """Ensures both repo docs/ and Desktop docs/ exist and share all baseline markdown files."""
+    REPO_DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    if DESKTOP_DOCS_DIR.exists():
+        for src_md in DESKTOP_DOCS_DIR.glob("*.md"):
+            dst_md = REPO_DOCS_DIR / src_md.name
+            if not dst_md.exists():
+                shutil.copy2(src_md, dst_md)
+        for src_md in REPO_DOCS_DIR.glob("*.md"):
+            dst_md = DESKTOP_DOCS_DIR / src_md.name
+            if not dst_md.exists():
+                shutil.copy2(src_md, dst_md)
 
 
 def get_ps_history_lines() -> list[str]:
@@ -187,7 +202,7 @@ def collect_delta(state: dict) -> dict:
     if len(ps_lines) > last_ps_line:
         for cmd in ps_lines[last_ps_line:]:
             c = cmd.strip()
-            if not c or "Log_Scraper_Milestone.bat" in c or "sync_all_docs.py" in c:
+            if not c or "Log_Scraper_Milestone.bat" in c or "sync_all_docs.py" in c or "SCRAPER_CHANGELOG.md" in c:
                 continue
             if any(secret in c.upper() for secret in ("API_KEY=", "BOT_TOKEN=", "WEBHOOK_URL=", "PASSWORD")):
                 continue
@@ -381,35 +396,40 @@ def update_architecture_exam_list(curr_notion: dict[str, dict], notion_added: li
 
 
 def sync_docs_to_both_folders(entry: str, arch_updated: bool) -> None:
+    bootstrap_docs_folders()
     for docs_dir in (REPO_DOCS_DIR, DESKTOP_DOCS_DIR):
         if not docs_dir.exists():
             continue
         changelog = docs_dir / "SCRAPER_CHANGELOG.md"
-        if changelog.exists():
-            content = changelog.read_text(encoding="utf-8")
-            parts = content.split("\n---\n", 2)
-            if len(parts) == 3:
-                new_content = (
-                    parts[0]
-                    + "\n---\n"
-                    + parts[1]
-                    + "\n---\n\n"
-                    + entry.strip()
-                    + "\n\n---\n"
-                    + parts[2].lstrip("\n")
-                )
-            else:
-                new_content = content.rstrip() + "\n\n---\n\n" + entry.strip() + "\n"
-            changelog.write_text(new_content, encoding="utf-8")
+        if not changelog.exists():
+            changelog.write_text("# Scraper & Parser Changelog (`gov-exam-scraper`)\n\n---\n\n" + entry.strip() + "\n", encoding="utf-8")
+            continue
 
-        if arch_updated and docs_dir == DESKTOP_DOCS_DIR:
-            src_arch = REPO_DOCS_DIR / "01_SYSTEM_ARCHITECTURE_AND_PIPELINE.md"
-            dst_arch = DESKTOP_DOCS_DIR / "01_SYSTEM_ARCHITECTURE_AND_PIPELINE.md"
-            if src_arch.exists() and dst_arch.exists():
-                dst_arch.write_text(src_arch.read_text(encoding="utf-8"), encoding="utf-8")
+        content = changelog.read_text(encoding="utf-8")
+        parts = content.split("\n---\n", 2)
+        if len(parts) == 3:
+            new_content = (
+                parts[0]
+                + "\n---\n"
+                + parts[1]
+                + "\n---\n\n"
+                + entry.strip()
+                + "\n\n---\n"
+                + parts[2].lstrip("\n")
+            )
+        else:
+            new_content = content.rstrip() + "\n\n---\n\n" + entry.strip() + "\n"
+        changelog.write_text(new_content, encoding="utf-8")
+
+    if arch_updated and DESKTOP_DOCS_DIR.exists():
+        src_arch = REPO_DOCS_DIR / "01_SYSTEM_ARCHITECTURE_AND_PIPELINE.md"
+        dst_arch = DESKTOP_DOCS_DIR / "01_SYSTEM_ARCHITECTURE_AND_PIPELINE.md"
+        if src_arch.exists():
+            shutil.copy2(src_arch, dst_arch)
 
 
 def main() -> None:
+    bootstrap_docs_folders()
     state = load_state()
 
     if "--init-baseline" in sys.argv:
