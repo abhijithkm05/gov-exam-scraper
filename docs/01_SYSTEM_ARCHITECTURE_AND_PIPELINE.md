@@ -43,6 +43,8 @@ Actively tracks submitted applications across official boards (`track_applied.py
 16. RRB Isolated Categories (`CEN 09/2026`, Reg `C92628792324`)
 17. KEA Group C FDA / SDA (`ED/KEA/14 & 16/RECRUITMENT/2026(RPC)`, App ID `267000001277482`)
 
+17. KEA VAO & Land Surveyor (VAO-RK & LAND SURVEYOR-RK) (`VAO-RK & LAND SURVEYOR-RK`)
+
 ---
 
 ## 2. End-to-End Data Pipeline

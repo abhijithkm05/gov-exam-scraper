@@ -1,8 +1,19 @@
 {
-  "last_run_timestamp": "2026-11-16T08:18:52.157414+00:00",
-  "last_git_commit": "6b5f962bbc4a7576302af4d6e01326de8371e2cd",
-  "last_ps_history_line": 64482,
+  "last_run_timestamp": "2026-11-16T08:26:39.118548+00:00",
+  "last_git_commit": "c3d6f85d67ca2a88b0f003b1d591a7107efab21f",
+  "last_ps_history_line": 64488,
   "notion_applied_snapshot": {
+    "41a075ba-aee9-8117-92b6-ff31cb2785bf": {
+      "exam_name": "KEA VAO & Land Surveyor (VAO-RK & LAND SURVEYOR-RK)",
+      "authority": "KEA",
+      "notif_no": "VAO-RK & LAND SURVEYOR-RK",
+      "reg_no": "",
+      "status": "Exam Scheduled",
+      "timeline": "Compulsory Kannada & Main Competitive Exam Tracking",
+      "notice_url": "https://cetonline.karnataka.gov.in/kea/",
+      "admit_url": "",
+      "latest_news": "Added to Notion Applied Tracker; RSS & KEA board monitoring active."
+    },
     "41a075ba-aee9-8149-ad68-f56ee1627ad2": {
       "exam_name": "RRB Isolated Categories - CEN No. 09/2026",
       "authority": "RRB Bengaluru",
