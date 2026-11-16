@@ -107,7 +107,32 @@ class GovExamScraper:
 
         # 1. Fetch existing page hashes
         query_url = f"https://api.notion.com/v1/databases/{db_id}/query"
-        resp = requests.post(query_url, headers=headers, json={"page_size": 100}, timeout=30)
+        class _PaginatedNotionResponse:
+            def __init__(self, status_code: int, rows: list[dict], text: str = ''):
+                self.status_code = status_code
+                self._rows = rows
+                self.text = text
+            def json(self) -> dict:
+                return {'results': self._rows}
+        _all_notion_rows: list[dict] = []
+        _has_more = True
+        _start_cursor = None
+        _last_status = 200
+        _last_text = ''
+        while _has_more:
+            _q_body: dict = {'page_size': 100}
+            if _start_cursor:
+                _q_body['start_cursor'] = _start_cursor
+            _raw_resp = requests.post(query_url, headers=headers, json=_q_body, timeout=30)
+            _last_status = _raw_resp.status_code
+            _last_text = getattr(_raw_resp, 'text', '')
+            if _last_status != 200:
+                break
+            _q_json = _raw_resp.json()
+            _all_notion_rows.extend(_q_json.get('results', []))
+            _has_more = _q_json.get('has_more', False)
+            _start_cursor = _q_json.get('next_cursor')
+        resp = _PaginatedNotionResponse(_last_status, _all_notion_rows, _last_text)
         if resp.status_code != 200:
             raise NotionSyncError(f"Notion query failed [status {resp.status_code}]: {resp.text}")
 
