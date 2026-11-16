@@ -65,7 +65,7 @@ EXAM_MONITORS = [
     },
     {
         "name": 'KEA Group C (FDA / SDA) 2026',
-        "query": '("KEA FDA" OR "KEA SDA" OR "KEA Group C") (exam date OR admit card OR hall ticket OR syllabus OR answer key)',
+        "query": '("KEA FDA" OR "KEA SDA" OR "KEA Group C" OR "ED/KEA/14" OR "ED/KEA/16") (exam date OR admit card OR hall ticket OR syllabus OR answer key)',
     },
 ]
 
