@@ -1,27 +1,3 @@
-﻿import os
-import re
-import json
-import requests
-import xml.etree.ElementTree as ET
-from pathlib import Path
-from dotenv import load_dotenv
-
-load_dotenv()
-
-NOTION_API_KEY = os.getenv("NOTION_API_KEY")
-NOTION_APPLIED_DB_ID = os.getenv("NOTION_APPLIED_DB_ID", "535459a2751646f4906c7c5e03f337ef")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-
-CACHE_FILE = Path("data/sent_alerts.json")
-CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-}
-
-# The 12 applied exams tracked from syllabus to result
 EXAM_MONITORS = [
     {
         "name": "SBI Junior Associates",
@@ -70,6 +46,26 @@ EXAM_MONITORS = [
     {
         "name": "NICL 500 Assistants",
         "query": '("NICL Assistant" OR "NICL recruitment") (exam date OR admit card OR mains OR syllabus)',
+    },
+    {
+        "name": 'RRB NTPC Graduate (CEN 06/2026)',
+        "query": '("RRB NTPC" OR "CEN 06/2026") (graduate OR exam date OR admit card OR syllabus OR city intimation)',
+    },
+    {
+        "name": 'RRB NTPC Under Graduate (CEN 07/2026)',
+        "query": '("RRB NTPC" OR "CEN 07/2026") ("under graduate" OR "10+2" OR exam date OR admit card OR syllabus)',
+    },
+    {
+        "name": 'RRB Station Master (CEN 08/2026)',
+        "query": '("RRB Station Master" OR "CEN 08/2026") (exam date OR admit card OR syllabus OR CBAT OR city intimation)',
+    },
+    {
+        "name": 'RRB Isolated Categories (CEN 09/2026)',
+        "query": '("RRB Isolated" OR "Ministerial & Isolated" OR "CEN 09/2026") (exam date OR admit card OR syllabus)',
+    },
+    {
+        "name": 'KEA Group C (FDA / SDA) 2026',
+        "query": '("KEA FDA" OR "KEA SDA" OR "KEA Group C") (exam date OR admit card OR hall ticket OR syllabus OR answer key)',
     },
 ]
 
